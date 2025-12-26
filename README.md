@@ -1,25 +1,24 @@
-# Inkplate5V2_HomeDashboard
+# Inkplate PictureFrame
+![Dashboard Preview](docs/images/pictureframe.jpg)
 
-![Dashboard Preview](docs/images/dashboard.png)
+This is a picture frame application for the [Inkplate 5 V2](https://www.inkplate.io/inkplate-5-v2/) and [Inkplate 10](https://soldered.com/product/inkplate-10-9-7-e-paper-board-copy/) e-paper displays by Soldered Electronics.
 
-This is a home dashboard for the [Inkplate 5 V2](https://www.inkplate.io/inkplate-5-v2/) e-paper display by Soldered Electronics.
-It is based on the [Inkplate-Arduino-library](https://github.com/SolderedElectronics/Inkplate-Arduino-library) and uses the following APIs:
-- [SMHI Open Data Meteorological Forecasts, PMP](https://opendata.smhi.se/metfcst/pmp/introduction) for Swedish weather data
-- The [Trafiklab SL Transport APIs](https://www.trafiklab.se/api/our-apis/sl/transport/) to get realtime departure times for public transport in Stockholm
+The code is based on an example from the [Inkplate-Arduino-library](https://github.com/SolderedElectronics/Inkplate-Arduino-library) and uses [Unsplash](https://unsplash.com/) to download images to display. The original example is converted into [PlatformIO](https://platformio.org/) to make it easier to build and upload the code to the Inkplate device. The code is also extended with features like outlined text for better readability and WifiManager support for easy WiFi configuration.
 
-## Highlights
-- Displays current weather conditions and forecast for the next 24 hours
-- Shows realtime departure times for public transport in Stockholm
-- Updates the traffic data every 20 seconds and the weather data every 200 seconds
-- Uses partial updates to reduce flickering and improve performance.
-- A full refresh is done every 10th update to remove ghosting.
-- The temperature graph is drawn with graphic primitives
+## Features
+* A random image is downloaded from Unsplash using keyword search.
 
-## Overview
-The code is a bit of a mess, but it works. The code is a [Plaform IO](https://platformio.org/) project and is structured in the following way:
-- `src/` contains the main code for the dashboard
-  - `Inkplate5V2_HomeDashboard.ino` is the main entry point for the application
-  - `Clock/` - a simple clock display
-  - `Fonts/` contains the bitmap fonts used in the dashboard ([Acari Sans](https://github.com/StefanPeev/acari-sans) by Stefan Peev)
-  - `PublicTransport/` contains the code to fetch and display public transport data from the Trafiklab SL Transport APIs for public transport in the Stockholm area in Sweden.
-  - `Weather/` contains the code to fetch and display weather data from SMHI, the Swedish Meteorological and Hydrological Institute
+* The images are refreshed at regular intervals and the board goes to deep sleep between images in order to save battery.
+
+* Uses [WifiManager](https://github.com/tzapu/WiFiManager) to manage WiFi connections so that no network credentials are required in the code. If no known network is found, the Inkplate creates an access point where you can connect and configure the WiFi credentials.
+    * The Unsplash API key is also configured using WifiManager's configuration portal.
+    * You can get your own free API key from [Unsplash Developers](https://unsplash.com/developers) and replace it in the code for your own usage. 
+
+* The description of the current image is shown at the bottom of the display in outlined text for better readability.
+
+* The font used is [Acari Sans](https://github.com/StefanPeev/acari-sans) by Stefan Peev.
+
+
+## Tips
+* If the images on Inkplate 10 appear to have incorrect colors, try to change to another display waveform using the Inkplate library example [Inkplate10_Wavefrom_EEPROM_Programming
+](https://github.com/SolderedElectronics/Inkplate-Arduino-library/tree/master/examples/Inkplate10/Diagnostics/Inkplate10_Wavefrom_EEPROM_Programming).
