@@ -22,6 +22,7 @@ char UNSPLASH_API_KEY[65] = ""; // Default API key, can be configured via WiFiMa
 #include <ArduinoJson.h>
 #include <WiFiManager.h>
 #include <Preferences.h>
+#include <WiFiClientSecure.h>
 
 #include "Fonts/AcariSans12.h"
 #include "Fonts/AcariSansbd12.h"
@@ -42,6 +43,7 @@ const char *networkName = "Inkplate5 Home Picture Frame";
 #endif
 
 void getImageUrl(char *resultUrl, char *resultDescription);
+uint8_t *downloadFile(const char *url, int32_t *length);
 
 void setup()
 {
@@ -107,9 +109,17 @@ void setup()
 
   Serial.println("Image url: " + String(url));
 
-  // Serial.println(display.drawImage(url, display.PNG, 0, 0));
-  bool drawImageResult = display.drawImage(url, display.PNG, 0, 0);
-    
+  // Download the image ourselves; InkplateLibrary 11.x's downloadFileHTTPS crashes
+  // (it destroys its WiFiClientSecure while HTTPClient still references it)
+  bool drawImageResult = false;
+  int32_t imageLen = 0;
+  uint8_t *imageBuf = downloadFile(url, &imageLen);
+  if (imageBuf)
+  {
+    drawImageResult = display.image.drawPngFromBuffer(imageBuf, imageLen, 0, 0, true, false);
+    free(imageBuf);
+  }
+
   if (!drawImageResult)
   {
     Serial.println("Error: Failed to draw image - check URL, network connection, or image format");
@@ -219,4 +229,84 @@ void getImageUrl(char *resultUrl, char* resultDescription)
     display.display();
   }
   http.end();
+}
+
+// Downloads url into a PSRAM buffer. Caller must free() the result.
+uint8_t *downloadFile(const char *url, int32_t *length)
+{
+  WiFiClientSecure client;
+  client.setInsecure(); // Use HTTPS but don't check cert
+
+  // Declared after client so it's destroyed first, while client is still valid
+  HTTPClient http;
+  http.useHTTP10(true); // Avoid chunked transfer encoding
+  http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
+
+  if (!http.begin(client, url))
+  {
+    Serial.println("Error: Failed to begin image download");
+    return nullptr;
+  }
+
+  int httpCode = http.GET();
+  if (httpCode != HTTP_CODE_OK)
+  {
+    Serial.println("Error: Image download HTTP code: " + String(httpCode));
+    http.end();
+    return nullptr;
+  }
+
+  int32_t size = http.getSize();
+  int32_t capacity = size > 0 ? size : 256 * 1024;
+  uint8_t *buffer = (uint8_t *)ps_malloc(capacity);
+  if (!buffer)
+  {
+    Serial.println("Error: Failed to allocate image buffer");
+    http.end();
+    return nullptr;
+  }
+
+  WiFiClient *stream = http.getStreamPtr();
+  int32_t total = 0;
+  unsigned long lastData = millis();
+  while ((size < 0 || total < size) && (http.connected() || stream->available()))
+  {
+    size_t available = stream->available();
+    if (!available)
+    {
+      if (millis() - lastData > 10000)
+        break; // Timed out waiting for data
+      delay(1);
+      continue;
+    }
+
+    if (total + (int32_t)available > capacity)
+    {
+      capacity *= 2;
+      uint8_t *grown = (uint8_t *)ps_realloc(buffer, capacity);
+      if (!grown)
+      {
+        Serial.println("Error: Failed to grow image buffer");
+        free(buffer);
+        http.end();
+        return nullptr;
+      }
+      buffer = grown;
+    }
+
+    total += stream->readBytes(buffer + total, min((int32_t)available, capacity - total));
+    lastData = millis();
+  }
+  http.end();
+
+  if (size > 0 && total != size)
+  {
+    Serial.println("Error: Incomplete image download (" + String(total) + "/" + String(size) + " bytes)");
+    free(buffer);
+    return nullptr;
+  }
+
+  Serial.println("Downloaded image: " + String(total) + " bytes");
+  *length = total;
+  return buffer;
 }
